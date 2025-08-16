@@ -24,6 +24,7 @@ class _ConsultationsPageState extends State<ConsultationsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final currentUser = FirebaseAuth.instance.currentUser;
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
