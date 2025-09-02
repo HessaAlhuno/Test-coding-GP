@@ -142,7 +142,7 @@ class _LawyerSchedulePageState extends State<LawyerSchedulePage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('اختر الأوقات التي تريد جعلها مشغولة أو إلغاء الحجز:',
+            Text(' اختر أوقات العمل:',
                 style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             Wrap(
