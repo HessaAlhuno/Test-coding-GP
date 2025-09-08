@@ -244,10 +244,18 @@ class _ConsultationsPageState extends State<ConsultationsPage> {
     final currentUser = FirebaseAuth.instance.currentUser;
 
     if (status == 'accepted' && currentUser != null) {
+      final lawyerSnap = await FirebaseFirestore.instance
+          .collection('LegalProfessional')
+          .doc(currentUser.uid)
+          .get();
+      final lawyerName = lawyerSnap.data()?['display_name'] ?? 'محامٍ';
+
       await FirebaseFirestore.instance.collection('Consultations').doc(docId).update({
         'status': status,
         'selected_lawyer_uid': currentUser.uid,
+        'selected_lawyer_name': lawyerName,
       });
+
     } else if (status == 'rejected' && currentUser != null) {
       await FirebaseFirestore.instance.collection('Consultations').doc(docId).update({
         'status': 'rejected',
