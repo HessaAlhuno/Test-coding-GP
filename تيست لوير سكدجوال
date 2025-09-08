@@ -496,13 +496,13 @@ class _LawyerSchedulePageState extends State<LawyerSchedulePage> {
                   const SizedBox(height: 20),
                   const Align(
                     alignment: Alignment.centerRight,
-                    child: Text('مواعيد الاستشارات', style: TextStyle(color: Color(0xFF052532))),
+                    child: Text('مواعيد الاستشارات', style: TextStyle(color: Color(0xFF052532) , fontSize: 18,fontWeight: FontWeight.bold,)),
                   ),
                 ],
               ),
             ),
 
-          // ====== البطاقات (Scroll) ======
+
           Expanded(
             child: Builder(
               builder: (context) {
@@ -520,8 +520,7 @@ class _LawyerSchedulePageState extends State<LawyerSchedulePage> {
                   stream: FirebaseFirestore.instance
                       .collection('Consultations')
                       .where('selected_lawyer_uid', isEqualTo: currentUid)
-                  // لو تبغى فقط المقبولة، فك السطر التالي:
-                  // .where('status', isEqualTo: 'accepted')
+
                       .snapshots(),
                   builder: (context, snap) {
                     if (snap.connectionState == ConnectionState.waiting) {
@@ -544,14 +543,14 @@ class _LawyerSchedulePageState extends State<LawyerSchedulePage> {
                       return dateStr.isNotEmpty && timeStr.isNotEmpty;
                     }).toList();
 
-                    // تحديث حالة وجود بطاقات
+
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       if (mounted && _hasAnyCards != docs.isNotEmpty) {
                         setState(() => _hasAnyCards = docs.isNotEmpty);
                       }
                     });
 
-                    // ترتيب حسب التاريخ ثم الوقت
+
                     docs.sort((a, b) {
                       final aMap = Map<String, dynamic>.from(a.data() as Map);
                       final bMap = Map<String, dynamic>.from(b.data() as Map);
@@ -592,25 +591,32 @@ class _LawyerSchedulePageState extends State<LawyerSchedulePage> {
                             boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))],
                           ),
                           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(_fmtDate(dateStr),
-                                      style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                                  Text('نوع الاستشارة: ${type.isNotEmpty ? type : '—'}',
-                                      style: const TextStyle(color: Colors.white)),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              _UserNameLine(userUid: userUid),
-                              const SizedBox(height: 4),
-                              Text('الوقت: ${timeStr.isNotEmpty ? timeStr : '—'}',
-                                  style: const TextStyle(color: Colors.white)),
-                            ],
+
+                          child: Directionality(
+                            textDirection: TextDirection.rtl,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+
+                                Text(
+                                  'نوع الاستشارة: ${type.isNotEmpty ? type : '—'}',
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 6),
+
+
+                                _UserNameLine(userUid: userUid),
+                                const SizedBox(height: 6),
+
+
+                                Text(
+                                  'التاريخ: ${_fmtDate(dateStr)}   •   الوقت: ${timeStr.isNotEmpty ? timeStr : '—'}',
+                                  style: const TextStyle(color: Colors.white70),
+                                ),
+                              ],
+                            ),
                           ),
+
                         );
                       },
                     );
