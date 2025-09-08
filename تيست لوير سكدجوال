@@ -300,6 +300,9 @@ class _LawyerSchedulePageState extends State<LawyerSchedulePage> {
       backgroundColor: const Color(0xFFF4E3DB),
       appBar: AppBar(
         backgroundColor: const Color(0xFF052532),
+        leading: BackButton(
+          color: Colors.white,
+        ),
         title: const Text('إدارة المواعيد', style: TextStyle(color: Colors.white)),
         centerTitle: true,
       ),
@@ -624,7 +627,7 @@ class _LawyerSchedulePageState extends State<LawyerSchedulePage> {
             visible: !_hasAnyCards,
             child: Center(
               child: Text(
-                _selectedTime != null ? _selectedTime!.format(context) : 'لا تواجد مواعيد',
+                _selectedTime != null ? _selectedTime!.format(context) : 'لا توجد مواعيد',
                 style: const TextStyle(color: Color(0xFF052532), fontSize: 14),
               ),
             ),
