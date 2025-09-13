@@ -1,38 +1,201 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-class LegalChatBot extends StatelessWidget {
+// ✅ إضافات HTTP:
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+
+// ====== موديل ونوع الرسالة ======
+enum Role { user, assistant, typing }
+
+class Message {
+  final String text;
+  final Role role;
+  Message({required this.text, required this.role});
+}
+
+// ====== ثابت لمسار أيقونة الانتظار ======
+const String kWaitingSvg = 'assets/icons/waiting_response.svg';
+
+// ====== صفحة الشات ======
+class LegalChatBot extends StatefulWidget {
   const LegalChatBot({Key? key}) : super(key: key);
+
+  @override
+  State<LegalChatBot> createState() => _LegalChatBotState();
+}
+
+class _LegalChatBotState extends State<LegalChatBot> {
+  // تحكمات
+  final TextEditingController _controller = TextEditingController();
+  final ScrollController _scroll = ScrollController();
+
+  // قائمة الرسائل
+  final List<Message> _messages = [];
+
+  // ألوان الهوية
+  static const Color kBg = Color(0xFFEFECE8);     // الخلفية العامة
+  static const Color kNavy = Color(0xFF062531);   // الكحلي (AppBar/فقاعة البوت)
+  static const Color kTyping = Color(0xFF005A4F); // أخضر الهوية (للايقونات فقط هنا)
+  static const Color kDots = Color(0xFFD9D9D9);   // نقاط الانتظار
+
+  // ✅ رابط API — عدّله حسب اندبوينت البايثون عندك
+  static const String kApiBase = 'https://ee8c84f01bf4.ngrok-free.app';
+  static const String kChatPath = '/search';
+
+  // ✅ دالة الاتصال بالـ API
+  Future<String> sendMessageToAPI(String message) async {
+    try {
+
+      // فلترة المدخلات الغير مفهومة
+      final cleanMsg = message.trim();
+
+// إذا قصير جدًا
+      if (cleanMsg.length < 2) {
+        return ' لم أفهم سؤالك، حاول صياغته بشكل أوضح.';
+      }
+
+// إذا كله رموز أو تكرار نفس الحرف
+      final regexLetters = RegExp(r'^[\u0600-\u06FFa-zA-Z]+$'); // بس حروف عربية/إنجليزية
+      final uniqueChars = cleanMsg.split('').toSet();
+
+      if (!regexLetters.hasMatch(cleanMsg) || uniqueChars.length == 1) {
+        return ' لم أفهم سؤالك، حاول صياغته بشكل أوضح.';
+      }
+
+
+
+      final uri = Uri.parse('$kApiBase$kChatPath');
+      final resp = await http
+          .post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'q': message}),
+      )
+          .timeout(const Duration(seconds: 20));
+
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(resp.bodyBytes));
+
+        // 1) لو فيه answer مباشر
+        if (data is Map && (data['answer'] != null || data['reply'] != null)) {
+          final ans = (data['answer'] ?? data['reply']).toString();
+          if (ans.length < 5) {
+            return ' لم أستطع إيجاد إجابة مناسبة. حاول صياغة السؤال بشكل أوضح.';
+          }
+          return ans;
+        }
+
+        // 2) لو فيه best.answer
+        if (data is Map && data['best'] is Map && (data['best']['answer'] != null)) {
+          final ans = data['best']['answer'].toString();
+          if (ans.length < 5) {
+            return ' لم أستطع إيجاد إجابة مناسبة. حاول صياغة السؤال بشكل أوضح.';
+          }
+          return ans;
+        }
+
+        // 3) لو فيه results
+        if (data is Map && data['results'] is List && data['results'].isNotEmpty) {
+          final first = data['results'][0];
+          if (first is Map && first['answer'] != null) {
+            final answer = first['answer'].toString();
+
+            // لو فيه score
+            if (first.containsKey('score')) {
+              final score = (first['score'] as num).toDouble();
+              if (score < 0.8 || answer.length < 5) {
+                return ' لم أجد إجابة دقيقة لسؤالك. جرب صياغة السؤال بشكل أوضح.';
+              }
+            } else {
+              // لو ما فيه score
+              if (answer.length < 5) {
+                return ' لم أستطع تحديد إجابة واضحة لسؤالك.';
+              }
+            }
+
+            return answer;
+          }
+        }
+
+        // fallback لو ما حصلنا شيء
+        return ' لم أجد إجابة مناسبة لسؤالك. حاول إعادة صياغة السؤال.';
+      } else {
+        return ' خطأ من الخادم (${resp.statusCode}).';
+      }
+    } catch (e) {
+      return ' تعذّر الاتصال بالخادم: $e';
+    }
+  }
+
+
+  Future<void> _send() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+
+    setState(() {
+      _messages.add(Message(text: text, role: Role.user));
+      _controller.clear();
+    });
+    _scrollToEnd();
+
+    setState(() {
+      _messages.add(Message(text: '', role: Role.typing));
+    });
+    _scrollToEnd();
+
+    final reply = await sendMessageToAPI(text);
+
+    setState(() {
+      if (_messages.isNotEmpty && _messages.last.role == Role.typing) {
+        _messages.removeLast();
+      }
+      _messages.add(Message(text: reply, role: Role.assistant));
+    });
+    _scrollToEnd();
+  }
+
+  void _scrollToEnd() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scroll.hasClients) {
+        _scroll.animateTo(
+          _scroll.position.maxScrollExtent + 120,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFEFECE8),
+      backgroundColor: kBg,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF062531),
+        backgroundColor: kNavy,
         elevation: 4,
         title: const Text(
           'المساعد القانوني',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Stack(
         children: [
-          // مكان الرسائل (لاحقاً تحط فقاعات الشات هنا)
-          const Positioned.fill(
+          Positioned.fill(
             child: Padding(
-              padding: EdgeInsets.only(bottom: 90), // عشان ما يغطيه شريط الكتابة
-              child: SizedBox.expand(),
+              padding: const EdgeInsets.only(bottom: 90),
+              child: ListView.builder(
+                controller: _scroll,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                itemCount: _messages.length,
+                itemBuilder: (context, i) => _buildBubble(_messages[i]),
+              ),
             ),
           ),
 
-          // ✅ شريط الكتابة في الأسفل
+          // شريط الإدخال
           Positioned(
             bottom: 20,
             left: 20,
@@ -40,44 +203,48 @@ class LegalChatBot extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFF062531),
+                color: kNavy,
                 borderRadius: BorderRadius.circular(30),
                 boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
+                  BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 6, offset: const Offset(0, 2)),
                 ],
               ),
               child: Row(
                 children: [
                   Expanded(
                     child: TextField(
+                      controller: _controller,
                       textDirection: TextDirection.rtl,
                       textAlign: TextAlign.right,
                       decoration: const InputDecoration(
                         hintText: '... اكتب سؤالك القانوني',
                         hintStyle: TextStyle(color: Colors.white70),
                         border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(vertical: 8),
                       ),
                       style: const TextStyle(color: Colors.white),
+                      onSubmitted: (_) => _send(),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFEFECE8),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: SvgPicture.asset(
-                        'assets/icons/bot-svgrepo-com.svg',
-                        width: 40,
-                        height: 40,
-                        color: Color(0xFF005A4F),
+                  InkWell(
+                    onTap: _send,
+                    borderRadius: BorderRadius.circular(24),
+                    child: Container(
+                      width: 48,
+                      height: 48,
+                      decoration: const BoxDecoration(
+                        color: kBg,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: SvgPicture.asset(
+                          'assets/icons/bot-svgrepo-com.svg',
+                          width: 30,
+                          height: 30,
+                          color: kTyping,
+                        ),
                       ),
                     ),
                   ),
@@ -86,6 +253,95 @@ class LegalChatBot extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // يبني الفقاعة حسب نوع الرسالة
+  Widget _buildBubble(Message m) {
+    switch (m.role) {
+      case Role.user:
+        return NormalChatBubble(
+          text: m.text,
+          alignRight: true,
+          bgColor: Color(0xFF9B7D73),
+          textColor: Colors.white,
+        );
+      case Role.assistant:
+        return NormalChatBubble(
+          text: m.text,
+          alignRight: false,
+          bgColor: kNavy,
+          textColor: Colors.white,
+        );
+      case Role.typing:
+        return const Padding(
+          padding: EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+          child: WaitingBubbleSvg(),
+        );
+    }
+  }
+}
+
+// ====== فقاعة جديدة بالـ Container بدل SVG ======
+class NormalChatBubble extends StatelessWidget {
+  final String text;
+  final bool alignRight;
+  final Color bgColor;
+  final Color textColor;
+
+  const NormalChatBubble({
+    super.key,
+    required this.text,
+    required this.alignRight,
+    required this.bgColor,
+    required this.textColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.7,
+        ),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(18),
+            topRight: Radius.circular(18),
+            bottomLeft: alignRight ? Radius.circular(18) : Radius.circular(0),
+            bottomRight: alignRight ? Radius.circular(0) : Radius.circular(18),
+          ),
+        ),
+        child: Text(
+          text,
+          textAlign: TextAlign.right,
+          style: TextStyle(color: textColor, fontSize: 15, height: 1.4),
+        ),
+      ),
+    );
+  }
+}
+
+// ====== فقاعة الانتظار ======
+class WaitingBubbleSvg extends StatelessWidget {
+  const WaitingBubbleSvg({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: SizedBox(
+        width: 45,
+        height: 25,
+        child: SvgPicture.asset(
+          kWaitingSvg,   // ✅ استدعاء مباشر للثابت
+          fit: BoxFit.contain,
+        ),
       ),
     );
   }
