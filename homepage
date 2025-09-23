@@ -6,6 +6,7 @@ import 'ConsultationStatusPage.dart';
 import 'ConsultationsPage.dart';
 import 'logOut.dart';
 import 'LawyerSchedulePage.dart';
+import 'LegalChatBot.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -350,10 +351,18 @@ class HomePage extends StatelessWidget {
               child: buildIconButton('assets/icons/settings-cog-svgrepo-com.svg'),
             ),
           ),
+
           if (!isLawyer)
             Positioned(
               top: -25,
               left: size.width * 0.5 - 35,
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const LegalChatBot()),
+                  );
+                },
               child: Stack(
                 alignment: Alignment.center,
                 children: [
@@ -381,6 +390,7 @@ class HomePage extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
             ),
         ],
       ),
