@@ -1,0 +1,46 @@
+Future<String> sendMessageToAPI(String message) async {
+    try {
+      // فلترة الأسئلة القصيرة جدًا (بناءً على عدد الكلمات)
+      if (message.trim().split(' ').length < 2) {
+        return '❌ الرجاء كتابة سؤالك القانوني بشكل أوضح.';
+      }
+
+      final uri = Uri.parse('$kApiBase$kChatPath');
+      final resp = await http
+          .post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'q': message}),
+      )
+          .timeout(const Duration(seconds: 20));
+
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(resp.bodyBytes));
+
+        // 1) مباشرة answer / reply
+        if (data is Map && (data['answer'] != null || data['reply'] != null)) {
+          return (data['answer'] ?? data['reply']).toString();
+        }
+
+        // 2) best.answer
+        if (data is Map && data['best'] is Map && (data['best']['answer'] != null)) {
+          return data['best']['answer'].toString();
+        }
+
+        // 3) results[*].answer
+        if (data is Map && data['results'] is List && data['results'].isNotEmpty) {
+          final first = data['results'][0];
+          if (first is Map && first['answer'] != null) {
+            return first['answer'].toString();
+          }
+        }
+
+        // احتياط: رجّع JSON نفسه
+        return data.toString();
+      } else {
+        return '❌ خطأ من الخادم (${resp.statusCode}).';
+      }
+    } catch (e) {
+      return '❌ تعذّر الاتصال بالخادم: $e';
+    }
+  }
